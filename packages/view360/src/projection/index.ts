@@ -6,6 +6,7 @@ import EquiangularProjection, { EquiangularProjectionOptions } from "./Equiangul
 import EquirectProjection, { EquirectProjectionOptions } from "./EquirectProjection";
 import LittlePlanetProjection, { LittlePlanetProjectionOptions } from "./LittlePlanetProjection";
 import StereoEquiProjection, { StereoEquiProjectionOptions } from "./StereoEquiProjection";
+import WideAngleCorrectionProjection, { WideAngleCorrectionOptions } from "./WideAngleCorrectionProjection";
 
 export {
   Projection,
@@ -15,7 +16,8 @@ export {
   EquiangularProjection,
   EquirectProjection,
   LittlePlanetProjection,
-  StereoEquiProjection
+  StereoEquiProjection,
+  WideAngleCorrectionProjection
 };
 
 export type {
@@ -26,5 +28,6 @@ export type {
   EquiangularProjectionOptions,
   EquirectProjectionOptions,
   LittlePlanetProjectionOptions,
-  StereoEquiProjectionOptions
+  StereoEquiProjectionOptions,
+  WideAngleCorrectionOptions
 };

@@ -33,6 +33,7 @@ class WebGLContext {
   };
 
   public get canvas() { return this._canvas; }
+  public get gl() { return this._gl; }
   public get maxTextureSize() { return this._maxTextureSize; }
   public get isWebGL2() { return this._isWebGL2; }
   public get supportVAO() { return this._isWebGL2 || !!this._extensions.vao; }
@@ -345,6 +346,64 @@ class WebGLContext {
   public useDefaultFrameBuffer() {
     const gl = this._gl;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  /**
+   * 创建 Framebuffer 及其颜色附件纹理
+   * @param width - 纹理宽度
+   * @param height - 纹理高度
+   * @returns FBO 对象，包含 framebuffer 和 texture
+   */
+  public createFramebuffer(width: number, height: number): {
+    framebuffer: WebGLFramebuffer;
+    texture: WebGLTexture;
+  } {
+    const gl = this._gl;
+    const framebuffer = gl.createFramebuffer();
+    const texture = gl.createTexture();
+
+    if (!framebuffer || !texture) {
+      throw new View360Error("无法创建 Framebuffer", ERROR.CODES.FAILED_LINKING_PROGRAM);
+    }
+
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+
+    // 检查 FBO 完整性
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
+      throw new View360Error("Framebuffer 不完整: " + status, ERROR.CODES.FAILED_LINKING_PROGRAM);
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+
+    return { framebuffer, texture };
+  }
+
+  /**
+   * 绑定指定的 Framebuffer
+   * @param framebuffer - 要绑定的 FBO，传 null 恢复默认
+   */
+  public bindFramebuffer(framebuffer: WebGLFramebuffer | null) {
+    this._gl.bindFramebuffer(this._gl.FRAMEBUFFER, framebuffer);
+  }
+
+  /**
+   * 删除 Framebuffer 及其附件纹理
+   * @param fbo - 要删除的 FBO 对象
+   */
+  public deleteFramebuffer(fbo: { framebuffer: WebGLFramebuffer; texture: WebGLTexture }) {
+    const gl = this._gl;
+    gl.deleteFramebuffer(fbo.framebuffer);
+    gl.deleteTexture(fbo.texture);
   }
 
   private _createBuffer(): WebGLBuffer {

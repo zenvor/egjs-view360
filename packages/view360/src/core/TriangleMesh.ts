@@ -9,9 +9,10 @@ import WebGLContext from "./WebGLContext";
 import UniformCanvasCube from "../uniform/UniformCanvasCube";
 import UniformTexture2D from "../uniform/UniformTexture2D";
 import UniformTextureCube from "../uniform/UniformTextureCube";
+import UniformTextureRenderTarget from "../uniform/UniformTextureRenderTarget";
 
 type CommonProjectionUniforms = {
-  uTexture: UniformTexture2D | UniformTextureCube | UniformCanvasCube;
+  uTexture: UniformTexture2D | UniformTextureCube | UniformCanvasCube | UniformTextureRenderTarget;
 }
 
 /**

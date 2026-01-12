@@ -92,8 +92,9 @@ const View360 = defineComponent({
     const canvasClassName = `${DEFAULT_CLASS.CANVAS} ${canvasClass}`.trim();
 
     return h(this.tag, {
+      ...this.$attrs,
       ref: "container",
-      class: DEFAULT_CLASS.CONTAINER
+      class: [DEFAULT_CLASS.CONTAINER, this.$attrs.class]
     }, [
       h("canvas", { class: canvasClassName }),
       this.$slots.default?.()

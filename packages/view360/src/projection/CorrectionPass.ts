@@ -81,6 +81,26 @@ class CorrectionPass {
     const gl = this._ctx.gl;
     const locs = this._uniformLocations;
 
+    const prevFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+    const prevViewport = gl.getParameter(gl.VIEWPORT) as Int32Array;
+    const prevProgram = gl.getParameter(gl.CURRENT_PROGRAM) as WebGLProgram | null;
+    const prevClearColor = gl.getParameter(gl.COLOR_CLEAR_VALUE) as Float32Array;
+    const prevActiveTexture = gl.getParameter(gl.ACTIVE_TEXTURE) as number;
+    const prevTextureBinding2D = gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null;
+    const prevArrayBuffer = gl.getParameter(gl.ARRAY_BUFFER_BINDING) as WebGLBuffer | null;
+
+    const glAsAny = gl as any;
+    const vaoExt = !glAsAny.bindVertexArray ? gl.getExtension("OES_vertex_array_object") : null;
+    const prevVAOBinding = glAsAny.bindVertexArray
+      ? (gl as WebGL2RenderingContext).getParameter((gl as WebGL2RenderingContext).VERTEX_ARRAY_BINDING)
+      : (vaoExt ? gl.getParameter((vaoExt as any).VERTEX_ARRAY_BINDING_OES) : null);
+
+    if (glAsAny.bindVertexArray) {
+      (gl as WebGL2RenderingContext).bindVertexArray(null);
+    } else if (vaoExt) {
+      (vaoExt as any).bindVertexArrayOES(null);
+    }
+
     // 绑定 FBO
     this._ctx.bindFramebuffer(this._fbo.framebuffer);
     gl.viewport(0, 0, this._outputWidth, this._outputHeight);
@@ -114,9 +134,20 @@ class CorrectionPass {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.disableVertexAttribArray(posLoc);
 
-    // 恢复默认 FBO 和 viewport
-    this._ctx.bindFramebuffer(null);
-    this._ctx.resize();
+    gl.useProgram(prevProgram);
+    gl.activeTexture(prevActiveTexture);
+    gl.bindTexture(gl.TEXTURE_2D, prevTextureBinding2D);
+    gl.bindBuffer(gl.ARRAY_BUFFER, prevArrayBuffer);
+
+    if (glAsAny.bindVertexArray) {
+      (gl as WebGL2RenderingContext).bindVertexArray(prevVAOBinding);
+    } else if (vaoExt) {
+      (vaoExt as any).bindVertexArrayOES(prevVAOBinding);
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, prevFramebuffer);
+    gl.viewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+    gl.clearColor(prevClearColor[0], prevClearColor[1], prevClearColor[2], prevClearColor[3]);
   }
 
   public destroy() {

@@ -43,7 +43,9 @@ class TriangleMesh<T extends CommonProjectionUniforms = CommonProjectionUniforms
   }
 
   public getTexture() {
-    return this.program.uniforms.uTexture.texture;
+    const uniform: any = this.program.uniforms.uTexture as any;
+
+    return uniform.sourceTexture || uniform.texture;
   }
 }
 

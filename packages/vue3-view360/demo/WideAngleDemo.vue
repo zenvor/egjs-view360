@@ -8,7 +8,9 @@ import { View360, WideAngleCorrectionProjection, Projection, ReadyEvent } from "
 
 // 使用 Vite 静态资源导入
 // @ts-ignore
-import wideAngleDemoVideo from "./static/3e559a623481993df8ddabbd82d6fa40_raw.mp4?url";
+import wideAngleDemoVideo from "./static/20260112112421_186_374.mp4?url";
+// @ts-ignore
+import wideAngleDemoImage from "./static/vlcsnap-2026-01-12-19h08m25s542.png?url";
 
 import ScanPreview from "./components/ScanPreview.vue";
 import CorrectionPanel, { CorrectionSettings } from "./components/CorrectionPanel.vue";
@@ -27,12 +29,13 @@ export default defineComponent({
   setup() {
     const view360Ref = ref<View360>();
     
-    // 视频源
-    // 确保有默认值，避免传递 undefined 给子组件
+    // 资源源
     const currentVideoUrl = ref(wideAngleDemoVideo || "");
+    const currentImageUrl = ref(wideAngleDemoImage);
+    const sourceType = ref<"video" | "image">("video");
     
     // 调试日志
-    console.log("[WideAngleDemo] Initial video url:", wideAngleDemoVideo);
+    console.log("[WideAngleDemo] Initial sources:", { video: wideAngleDemoVideo, image: wideAngleDemoImage });
 
     // 保存创建的 blob url 以便释放
     const currentBlobUrl = ref<string | null>(null);
@@ -44,10 +47,10 @@ export default defineComponent({
     const correctionSettings = ref<CorrectionSettings>({
       mode: "erp",
       yaw: 0,
-      pitch: 0,
-      roll: 0,
-      hfov: 180,
-      vfov: 90,
+      pitch: 15,
+      roll: 0.5,
+      hfov: 165,
+      vfov: 53,
       fisheyeFov: 180,
       outputWidth: 4096,
       outputHeight: 2048
@@ -58,7 +61,14 @@ export default defineComponent({
     const yaw = ref(0);
     const pitch = ref(0);
     const zoom = ref(1);
-    const isVideoSource = ref(true); // 当前资源是否为视频（用于 projection.video）
+    const isVideoSource = ref(true); // 内部状态
+    
+    // 监听 sourceType 变化，自动切换 isVideoSource 并重载投影
+    watch(sourceType, (newType) => {
+      isVideoSource.value = newType === "video";
+      const url = newType === "video" ? currentVideoUrl.value : currentImageUrl.value;
+      createProjection(url);
+    });
     // zoomRange 在核心库默认是 0.6 ~ 10，这里保持一致；若外部配置了 zoomRange，会在 ready 后同步更新
     const zoomRangeMin = ref(0.6);
     const zoomRangeMax = ref(10);
@@ -110,7 +120,7 @@ export default defineComponent({
     // 更新投影设置 (点击应用按钮时调用)
     function applyCorrectionSettings() {
       // 如果有 blob url，优先使用
-      const url = currentBlobUrl.value || currentVideoUrl.value;
+      const url = currentBlobUrl.value || (sourceType.value === "video" ? currentVideoUrl.value : currentImageUrl.value);
       createProjection(url);
     }
 
@@ -250,6 +260,8 @@ export default defineComponent({
       isLoading,
       errorMessage,
       currentVideoUrl,
+      currentImageUrl,
+      sourceType,
       isVideoSource,
       // Methods
       onReady,
@@ -267,6 +279,24 @@ export default defineComponent({
   <div class="demo-container">
     <!-- 视频播放器区域 -->
     <main class="viewer-section">
+      <!-- 视频/图片 来源切换 -->
+      <div class="source-switcher">
+        <button 
+          :class="{ active: sourceType === 'video' }" 
+          @click="sourceType = 'video'"
+        >
+          <span class="material-symbols-outlined">movie</span>
+          VIDEO
+        </button>
+        <button 
+          :class="{ active: sourceType === 'image' }" 
+          @click="sourceType = 'image'"
+        >
+          <span class="material-symbols-outlined">image</span>
+          IMAGE
+        </button>
+      </div>
+
       <div class="viewer-wrapper">
         <View360
           v-if="projection"
@@ -294,8 +324,8 @@ export default defineComponent({
       <!-- 结果预览 (左下角) -->
       <ResultPreview 
         :settings="correctionSettings"
-        :src="currentVideoUrl"
-        :is-video="isVideoSource"
+        :src="sourceType === 'video' ? currentVideoUrl : currentImageUrl"
+        :is-video="sourceType === 'video'"
       />
 
       <!-- 矫正参数设置面板 (左侧) -->
@@ -385,5 +415,50 @@ export default defineComponent({
   border-radius: 8px;
   z-index: 200;
   font-size: 14px;
+}
+
+/* 来源切换器 */
+.source-switcher {
+  position: absolute;
+  top: 20px;
+  left: 360px; /* 避开 CorrectionPanel */
+  display: flex;
+  gap: 8px;
+  background: rgba(15, 15, 20, 0.85);
+  backdrop-filter: blur(10px);
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 100;
+}
+
+.source-switcher button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #888;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  transition: all 0.2s;
+}
+
+.source-switcher button .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.source-switcher button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ccc;
+}
+
+.source-switcher button.active {
+  background: rgba(100, 108, 255, 0.2);
+  border-color: #646cff;
+  color: #fff;
 }
 </style>

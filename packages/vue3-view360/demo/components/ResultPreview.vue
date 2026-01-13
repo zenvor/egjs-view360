@@ -197,18 +197,17 @@ export default defineComponent({
     white-space: nowrap;
   }
   
-  .result-preview {
-    position: absolute;
-    bottom: 20px;
-    left: 20px;
+    .result-preview {
+    position: relative;
     width: 280px;
-    height: 180px;
+    height: 100%; /* Match height of siblings if needed, or fixed */
+    flex-shrink: 0;
+    min-height: 200px;
     background: rgba(15, 15, 20, 0.85);
     backdrop-filter: blur(10px);
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     padding: 12px;
-    z-index: 90; /* Lower than popups/panels */
     color: #fff;
     display: flex;
     flex-direction: column;

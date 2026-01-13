@@ -82,7 +82,7 @@ export default defineComponent({
           <span class="label">YAW</span>
         </div>
         <div class="slider-group knob-center">
-          <button class="arrow-btn" @click="stepYaw(-10)">
+          <button class="arrow-btn" @click="stepYaw(10)">
             <span class="material-symbols-outlined">chevron_left</span>
           </button>
           <!-- KnobControl supports v-model, so we need to bridge it -->
@@ -91,7 +91,7 @@ export default defineComponent({
             :modelValue="yaw" 
             @update:modelValue="$emit('update:yaw', $event)" 
           />
-          <button class="arrow-btn" @click="stepYaw(10)">
+          <button class="arrow-btn" @click="stepYaw(-10)">
             <span class="material-symbols-outlined">chevron_right</span>
           </button>
         </div>
@@ -125,27 +125,26 @@ export default defineComponent({
 <style scoped>
 /* 底部控制面板 */
 .camera-controls {
-  position: absolute;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 600px;
-  background: rgba(10, 10, 14, 0.9);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 24px 32px;
+  position: relative;
+  width: 100%;
+  margin: 0;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 20px 24px;
   color: #fff;
-  z-index: 100;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* Distribute vertical space */
 }
 
 .controls-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 24px;
   position: relative;
+  /* Removed large bottom margin to let flex handle spacing */
 }
 
 .controls-header h3 {
@@ -162,6 +161,15 @@ export default defineComponent({
   font-size: 12px;
   color: #666;
 }
+
+.sliders-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 1;
+  padding-top: 10px; /* Spacing from header */
+}
+
 
 
 

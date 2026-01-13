@@ -277,73 +277,68 @@ export default defineComponent({
 
 <template>
   <div class="demo-container">
-    <!-- 视频播放器区域 -->
-    <main class="viewer-section">
-      <!-- 视频/图片 来源切换 -->
-      <div class="source-switcher">
-        <button 
-          :class="{ active: sourceType === 'video' }" 
-          @click="sourceType = 'video'"
-        >
-          <span class="material-symbols-outlined">movie</span>
-          VIDEO
-        </button>
-        <button 
-          :class="{ active: sourceType === 'image' }" 
-          @click="sourceType = 'image'"
-        >
-          <span class="material-symbols-outlined">image</span>
-          IMAGE
-        </button>
-      </div>
-
-      <div class="viewer-wrapper">
-        <View360
-          v-if="projection"
-          ref="view360Ref"
-          :projection="projection"
-          :tab-index="1"
-          class="viewer"
-          @ready="onReady"
-          @load-start="onLoadStart"
-          @load="onLoad"
-          @error="onError"
+    <div class="layout-grid">
+      <!-- 左侧边栏 -->
+      <aside class="left-sidebar">
+        <!-- 1. 矫正参数 (占据全高) -->
+        <CorrectionPanel 
+          v-model="correctionSettings"
+          v-model:sourceType="sourceType"
+          @apply="applyCorrectionSettings"
+          class="sidebar-panel fill-height"
         />
-        <div v-if="isLoading" class="loading-overlay">
-          <div class="spinner"></div>
-          <span>加载中...</span>
+      </aside>
+
+      <!-- 右侧主要内容 -->
+      <main class="right-content">
+        <!-- 视频播放器区域 -->
+        <div class="viewer-section">
+          <div class="viewer-wrapper">
+            <View360
+              v-if="projection"
+              ref="view360Ref"
+              :projection="projection"
+              :tab-index="1"
+              class="viewer"
+              @ready="onReady"
+              @load-start="onLoadStart"
+              @load="onLoad"
+              @error="onError"
+            />
+            <div v-if="isLoading" class="loading-overlay">
+              <div class="spinner"></div>
+              <span>加载中...</span>
+            </div>
+
+            <!-- 扫描预览 (Viewer 内部右上角) -->
+            <ScanPreview />
+          </div>
+          <div v-if="errorMessage" class="error-message">
+            {{ errorMessage }}
+          </div>
         </div>
-      </div>
-      <div v-if="errorMessage" class="error-message">
-        {{ errorMessage }}
-      </div>
 
-      <!-- 扫描预览 (右上角) -->
-      <ScanPreview />
+        <!-- 2 & 3. 底部控制区 (相机控制 + 结果预览) -->
+        <div class="bottom-controls">
+          <div class="controls-container">
+            <CameraControls
+              v-model:yaw="yaw"
+              v-model:pitch="pitch"
+              v-model:zoom="zoom"
+              :zoomRangeMin="zoomRangeMin"
+              :zoomRangeMax="zoomRangeMax"
+            />
+          </div>
 
-      <!-- 结果预览 (左下角) -->
-      <ResultPreview 
-        :settings="correctionSettings"
-        :src="sourceType === 'video' ? currentVideoUrl : currentImageUrl"
-        :is-video="sourceType === 'video'"
-      />
-
-      <!-- 矫正参数设置面板 (左侧) -->
-      <CorrectionPanel 
-        v-model="correctionSettings"
-        @apply="applyCorrectionSettings"
-      />
-
-      <!-- 底部控制面板 -->
-      <CameraControls
-        v-model:yaw="yaw"
-        v-model:pitch="pitch"
-        v-model:zoom="zoom"
-        :zoomRangeMin="zoomRangeMin"
-        :zoomRangeMax="zoomRangeMax"
-
-      />
-    </main>
+          <ResultPreview 
+            :settings="correctionSettings"
+            :src="sourceType === 'video' ? currentVideoUrl : currentImageUrl"
+            :is-video="sourceType === 'video'"
+            class="bottom-preview"
+          />
+        </div>
+      </main>
+    </div>
   </div>
 </template>
 
@@ -352,21 +347,96 @@ export default defineComponent({
   width: 100%;
   height: 100vh;
   margin: 0;
-  padding: 0;
+  padding: 30px;
+  box-sizing: border-box;
   background: #000;
   overflow: hidden;
   font-family: 'Inter', sans-serif;
+  display: flex;
+  justify-content: center;
 }
 
-.viewer-section {
+.layout-grid {
+  display: flex;
   width: 100%;
+  max-width: 1500px; /* Reduced from 1800px */
+  gap: 20px;
   height: 100%;
+}
+
+/* Left Sidebar */
+.left-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 320px;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+/* Bottom Controls Container */
+.bottom-controls {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  height: 220px; /* Fixed height for alignment */
+  align-items: stretch;
+}
+
+.controls-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: stretch; /* Ensure child fills height */
+}
+
+.controls-container :deep(.camera-controls) {
+  width: 100%;
+  height: 100%; /* Fill container */
+}
+
+.bottom-preview {
+  height: 100%;
+  width: auto;
+  aspect-ratio: 16 / 9;
+  flex-shrink: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Right Content */
+.right-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+  min-width: 0; /* Fix flex child overflow */
+  height: 100%;
+}
+
+/* Viewer Section */
+.viewer-section {
   position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Center vertically if 16:9 leaves gaps */
+  background: #000; /* Visualize bounds */
+  border-radius: 16px;
+  /* border: 1px solid rgba(255, 255, 255, 0.1); Optional frame around section */
 }
 
 .viewer-wrapper {
+  position: relative;
   width: 100%;
-  height: 100%;
+  aspect-ratio: 16 / 9; 
+  background: #000;
+  box-shadow: 0 0 40px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  overflow: hidden;   /* Clip overflow */
 }
 
 .viewer-wrapper :deep(.view360-container),
@@ -375,90 +445,5 @@ export default defineComponent({
   height: 100% !important;
   display: block !important;
   outline: none;
-}
-
-/* Loading & Error */
-.loading-overlay {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  gap: 12px;
-  z-index: 10;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.error-message {
-  position: absolute;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 12px 24px;
-  background: #ef4444;
-  color: #fff;
-  border-radius: 8px;
-  z-index: 200;
-  font-size: 14px;
-}
-
-/* 来源切换器 */
-.source-switcher {
-  position: absolute;
-  top: 20px;
-  left: 360px; /* 避开 CorrectionPanel */
-  display: flex;
-  gap: 8px;
-  background: rgba(15, 15, 20, 0.85);
-  backdrop-filter: blur(10px);
-  padding: 8px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  z-index: 100;
-}
-
-.source-switcher button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: #888;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  transition: all 0.2s;
-}
-
-.source-switcher button .material-symbols-outlined {
-  font-size: 18px;
-}
-
-.source-switcher button:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #ccc;
-}
-
-.source-switcher button.active {
-  background: rgba(100, 108, 255, 0.2);
-  border-color: #646cff;
-  color: #fff;
 }
 </style>

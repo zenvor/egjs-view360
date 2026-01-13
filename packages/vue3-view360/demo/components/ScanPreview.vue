@@ -23,13 +23,13 @@ export default defineComponent({
   position: absolute;
   top: 20px;
   right: 20px;
-  width: 280px;
-  height: 160px;
-  background: rgba(15, 15, 20, 0.85);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 12px;
+  width: 240px;
+  height: 135px; /* 16:9 like in reference */
+  background: rgba(15, 15, 20, 0.6);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 8px;
   z-index: 100;
   color: #fff;
   display: flex;

@@ -19,26 +19,20 @@ export default defineComponent({
     modelValue: {
       type: Object as PropType<CorrectionSettings>,
       required: true
+    },
+    sourceType: {
+      type: String as PropType<"video" | "image">,
+      default: "video"
     }
   },
-  emits: ["update:modelValue", "apply"],
+  emits: ["update:modelValue", "apply", "update:sourceType"],
   setup(props, { emit }) {
     const isSettingsPanelOpen = ref(true);
 
-    // Create a local copy to mutate, or emit update on every change.
-    // Given the original used v-model directly on refs, we should probably emit updates directly.
-    // However, since it's a complex object, let's use a computed proxy or just careful v-modeling.
-    // Simplest approach: Use a local reactive object that watches props and emits updates.
-    // Actually, to avoid deep watchers issues, let's just use the prop directly if we can,
-    // but we can't mutate props. So we need computed properties for each field or a reactive copy.
-
-    // Let's use a reactive copy and emit update:modelValue on change.
-    
+    // ... (rest of setup)
     const localSettings = ref<CorrectionSettings>({ ...props.modelValue });
 
     watch(() => props.modelValue, (newVal) => {
-      // Sync from parent if parent updates independently (e.g. reset)
-      // Checks to avoid infinite loops if needed, though simple assignment is usually safe if values match
       if (JSON.stringify(newVal) !== JSON.stringify(localSettings.value)) {
         localSettings.value = { ...newVal };
       }
@@ -48,8 +42,8 @@ export default defineComponent({
       emit("update:modelValue", { ...newVal });
     }, { deep: true });
 
-    function toggleSettingsPanel() {
-      isSettingsPanelOpen.value = !isSettingsPanelOpen.value;
+    function setSourceType(type: "video" | "image") {
+      emit("update:sourceType", type);
     }
 
     function applySettings() {
@@ -58,6 +52,7 @@ export default defineComponent({
 
     return {
       localSettings,
+      setSourceType,
       applySettings
     };
   }
@@ -71,6 +66,26 @@ export default defineComponent({
     </div>
     
     <div class="panel-content">
+      <!-- Source Toggle (New) -->
+      <div class="control-group">
+        <div class="source-toggle">
+          <button 
+            :class="{ active: sourceType === 'video' }" 
+            @click="setSourceType('video')"
+          >
+            <span class="material-symbols-outlined">movie</span>
+            VIDEO
+          </button>
+          <button 
+            :class="{ active: sourceType === 'image' }" 
+            @click="setSourceType('image')"
+          >
+            <span class="material-symbols-outlined">image</span>
+            IMAGE
+          </button>
+        </div>
+      </div>
+
       <div class="control-group">
         <span class="group-label">INPUT MODE</span>
         <div class="radio-group">
@@ -150,20 +165,18 @@ export default defineComponent({
 <style scoped>
 /* 矫正参数面板 */
 .correction-panel {
-  position: absolute;
-  top: 20px;
-  left: 20px;
+  position: relative;
   width: 320px;
+  height: 100%; /* Fill sidebar height */
+  flex-shrink: 0;
   background: rgba(15, 15, 20, 0.85);
   backdrop-filter: blur(10px);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  z-index: 100;
   color: #fff;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 250px);
 }
 
 .panel-header {
@@ -212,28 +225,81 @@ export default defineComponent({
   margin-top: -4px;
 }
 
+.source-toggle {
+  display: flex;
+  background: transparent; /* Remove background to align border with edge */
+  padding: 0;             /* Remove padding */
+  border-radius: 14px;
+  border: none;           /* Remove container border */
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.source-toggle button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.1); /* Base border for balance */
+  background: #0a0a0e;
+  color: #71717a;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.source-toggle button.active {
+  background: rgba(85, 110, 255, 0.12);
+  border-color: #556eff;
+  color: #ffffff;
+  /* box-shadow: 0 0 15px rgba(85, 110, 255, 0.2); */
+}
+
+.source-toggle button .material-symbols-outlined {
+  font-size: 20px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.source-toggle button.active .material-symbols-outlined {
+  color: #ffffff;
+}
+
 .radio-group {
   display: flex;
+  background: transparent;
+  padding: 0;
+  border-radius: 14px;
+  border: none;
   gap: 8px;
 }
 
 .radio-group label {
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  background: #0a0a0e;
+  color: #71717a;
   font-size: 13px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  padding: 10px;
-  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: all 0.2s;
-  color: #ccc;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
 }
 
 .radio-group label.active {
-  background: rgba(100, 108, 255, 0.2);
-  border-color: #646cff;
-  color: #fff;
+  background: rgba(85, 110, 255, 0.12);
+  border-color: #556eff;
+  color: #ffffff;
 }
 
 .radio-group input {

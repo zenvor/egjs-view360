@@ -7,6 +7,7 @@ import WebGLContext from "../core/WebGLContext";
 import Texture from "../texture/Texture";
 import Texture2D from "../texture/Texture2D";
 import TriangleMesh from "../core/TriangleMesh";
+import PlaneGeometry from "../geometry/PlaneGeometry";
 import SphereGeometry from "../geometry/SphereGeometry";
 import ShaderProgram from "../core/ShaderProgram";
 import CorrectionPass, { CorrectionParams } from "./CorrectionPass";
@@ -26,6 +27,11 @@ export interface WideAngleCorrectionOptions extends ProjectionOptions {
    * @default "erp"
    */
   mode?: "erp" | "fisheye";
+  /**
+   * 是否使用平面投影模式展示结果（而非 360 球体）
+   * @default false
+   */
+  flatProjection?: boolean;
   /**
    * Yaw 旋转角度（度）
    * @default 0
@@ -81,6 +87,7 @@ class WideAngleCorrectionProjection extends Projection {
   private _correctionPass: CorrectionPass | null = null;
   private _outputWidth: number;
   private _outputHeight: number;
+  private _flatProjection: boolean;
 
   /**
    * Create new instance
@@ -102,6 +109,7 @@ class WideAngleCorrectionProjection extends Projection {
 
     this._outputWidth = options.outputWidth ?? 4096;
     this._outputHeight = options.outputHeight ?? 2048;
+    this._flatProjection = options.flatProjection ?? false;
   }
 
   public createMesh(ctx: WebGLContext, texture: Texture): TriangleMesh {
@@ -125,6 +133,8 @@ class WideAngleCorrectionProjection extends Projection {
     }
 
     const gl = ctx.gl;
+    // 根据宽高比计算平面尺寸，保持高度为 1
+    const aspect = this._outputWidth / this._outputHeight;
 
     if (texture.isVideo()) {
       const pass = new CorrectionPass(ctx, this._outputWidth, this._outputHeight);
@@ -134,7 +144,10 @@ class WideAngleCorrectionProjection extends Projection {
         uTexture: this._createVideoUniform(texture as Texture2D, gl)
       };
 
-      const geometry = new SphereGeometry();
+      const geometry = this._flatProjection
+        ? new PlaneGeometry(aspect, 1, -1) // 平面模式：宽高比平面
+        : new SphereGeometry();            // 默认模式：球体
+      
       const program = new ShaderProgram(ctx, vs, fs, uniforms);
       const vao = ctx.createVAO(geometry, program);
       const mesh = new TriangleMesh(vao, program);
@@ -191,7 +204,10 @@ class WideAngleCorrectionProjection extends Projection {
       })
     };
 
-    const geometry = new SphereGeometry();
+    const geometry = this._flatProjection
+      ? new PlaneGeometry(aspect, 1, -1)
+      : new SphereGeometry();
+      
     const program = new ShaderProgram(ctx, vs, fs, uniforms);
     const vao = ctx.createVAO(geometry, program);
     const mesh = new TriangleMesh(vao, program);

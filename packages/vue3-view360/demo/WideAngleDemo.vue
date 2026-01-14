@@ -97,6 +97,153 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
           const mod = ((inputYaw % 360) + 360) % 360;
           return mod;
         };
+
+        // --- 相机视点到原始视频像素坐标的转换 ---
+        // 将相机的 yaw/pitch（矫正后球面上的观看方向）逆向转换为矫正前原始视频上的像素坐标
+        const toRad = (deg: number) => deg * Math.PI / 180;
+
+        // 构建旋转矩阵（与 shader 中的 buildRotation 保持一致）
+        const buildRotationMatrix = (yawRad: number, pitchRad: number, rollRad: number): number[][] => {
+          const cy = Math.cos(yawRad), sy = Math.sin(yawRad);
+          const cp = Math.cos(pitchRad), sp = Math.sin(pitchRad);
+          const cr = Math.cos(rollRad), sr = Math.sin(rollRad);
+
+          // Shader logic (Column-Major in GLSL, we emulate Row-Major here matching the GLSL matrix layout)
+          // Ry
+          // cy  0 -sy
+          // 0   1   0
+          // sy  0  cy
+          const Ry = [
+            [cy, 0, -sy],
+            [0, 1, 0],
+            [sy, 0, cy]
+          ];
+          // Rx
+          // 1   0   0
+          // 0   cp  sp
+          // 0  -sp  cp
+          const Rx = [
+            [1, 0, 0],
+            [0, cp, sp],
+            [0, -sp, cp]
+          ];
+          // Rz
+          // cr -sr  0
+          // sr  cr  0
+          // 0    0  1
+          const Rz = [
+            [cr, -sr, 0],
+            [sr, cr, 0],
+            [0, 0, 1]
+          ];
+
+          // R = Rz * Rx * Ry
+          const mulMat = (a: number[][], b: number[][]) => {
+            const result: number[][] = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+            for (let i = 0; i < 3; i++) {
+              for (let j = 0; j < 3; j++) {
+                result[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j];
+              }
+            }
+            return result;
+          };
+
+          return mulMat(Rz, mulMat(Rx, Ry));
+        };
+
+        // 矩阵转置（求逆旋转）
+        const transposeMat = (m: number[][]): number[][] => {
+          return [
+            [m[0][0], m[1][0], m[2][0]],
+            [m[0][1], m[1][1], m[2][1]],
+            [m[0][2], m[1][2], m[2][2]]
+          ];
+        };
+
+        // 矩阵乘向量
+        const mulMatVec = (m: number[][], v: number[]): number[] => {
+          return [
+            m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
+            m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
+            m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2]
+          ];
+        };
+
+        // 将相机 yaw/pitch 转换为原始视频像素坐标
+        // 核心逻辑：
+        // 1. Camera Angle -> Camera Vector (World Space, Corrected)
+        // 2. Apply Inverse Correction Rotation -> Source Vector (Source Space)
+        // 3. Source Vector -> Spherical (lon, lat) -> UV -> Pixel
+        const cameraToSourcePixel = (
+          cameraYaw: number,  // 相机 yaw（度）
+          cameraPitch: number // 相机 pitch（度）
+        ): { x: number; y: number; valid: boolean } => {
+          const settings = correctionSettings.value;
+          
+          // 获取视频/图片尺寸
+          const videoEl = getVideoElement();
+          let srcW = 3840, srcH = 2160; // 默认值
+          
+          // 尝试更精确地获取尺寸
+          const viewerComp = view360Ref.value as any;
+          if (viewerComp && viewerComp.view360 && viewerComp.view360._mesh) {
+            const tex = viewerComp.view360._mesh.getTexture();
+            if (tex) {
+              srcW = tex.width || srcW;
+              srcH = tex.height || srcH;
+            }
+          } else if (videoEl && videoEl.videoWidth > 0) {
+            srcW = videoEl.videoWidth;
+            srcH = videoEl.videoHeight;
+          }
+
+          // 1. Camera Angle -> Vector
+          // Camera Yaw: +Looking Left (CCW). Math Phi: 0=+Z, +Phi=+X (Right).
+          // So Math Phi = -CameraYaw.
+          // Camera Pitch: +Looking Up. Math Lat: +Up. 
+          // So Math Lat = CameraPitch.
+          const cYawRad = toRad(-cameraYaw);
+          const cPitchRad = toRad(cameraPitch);
+
+          // Vcam = (x, y, z) = (cosLat*sinPhi, sinLat, cosLat*cosPhi) matches shader coordinate system
+          const cy = Math.cos(cYawRad), sy = Math.sin(cYawRad);
+          const cp = Math.cos(cPitchRad), sp = Math.sin(cPitchRad);
+          const Vcam = [cp * sy, sp, cp * cy];
+
+          // 2. Inverse Correction
+          // Shader uses: uRotYPR = [-yaw, -pitch, roll]
+          // Shader Logic: imgDir = Rinv * worldDir
+          // So we replicate R using shader parameters, then transpose it.
+          const rYawRad = toRad(-settings.yaw);
+          const rPitchRad = toRad(-settings.pitch);
+          const rRollRad = toRad(settings.roll);
+          
+          const R = buildRotationMatrix(rYawRad, rPitchRad, rRollRad);
+          const Rinv = transposeMat(R);
+          
+          const Vsrc = mulMatVec(Rinv, Vcam);
+
+          // 3. Vector -> UV
+          // lon = atan2(x, z)
+          // lat = asin(y)
+          const vx = Vsrc[0], vy = Vsrc[1], vz = Vsrc[2];
+          const lon = Math.atan2(vx, vz); // [-PI, PI]
+          const lat = Math.asin(Math.max(-1, Math.min(1, vy))); // [-PI/2, PI/2]
+
+          // UV Mapping
+          // Shader: u = (lon / hfov + 0.5) * (imgX - 1)
+          // Shader: v = (0.5 - lat / vfov) * (imgY - 1)
+          const fovH = toRad(Math.max(1e-6, settings.hfov));
+          const fovV = toRad(Math.max(1e-6, settings.vfov));
+
+          const px = (lon / fovH + 0.5) * (srcW - 1);
+          const py = (0.5 - lat / fovV) * (srcH - 1);
+
+          // 检查是否在图像范围内
+          const valid = px >= 0 && px < srcW && py >= 0 && py < srcH;
+
+          return { x: px, y: py, valid };
+        };
         const shouldLogYawWrap = (prevYaw: number, nextYaw: number, rawYaw: number) => {
           // 当 rawYaw 接近 360 或 0，或 yaw 发生大跳变时才打印（避免刷屏）
           const rawNearEdge = rawYaw > 350 || rawYaw < 10;
@@ -281,6 +428,16 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
             yaw.value = nextYaw;
             pitch.value = e.pitch;
             zoom.value = e.zoom;
+
+            // 计算相机中心视点对应的原始视频像素坐标
+            const sourcePixel = cameraToSourcePixel(nextYaw, e.pitch);
+            console.log("[相机→原始像素坐标]", {
+              cameraYaw: nextYaw.toFixed(2) + "°",
+              cameraPitch: e.pitch.toFixed(2) + "°",
+              sourceX: sourcePixel.valid ? sourcePixel.x.toFixed(2) : "N/A",
+              sourceY: sourcePixel.valid ? sourcePixel.y.toFixed(2) : "N/A",
+              valid: sourcePixel.valid
+            });
             
             Promise.resolve().then(() => {
               isSyncingFromViewer.value = false;

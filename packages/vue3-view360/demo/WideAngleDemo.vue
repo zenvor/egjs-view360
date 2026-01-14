@@ -178,7 +178,7 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
         const cameraToSourcePixel = (
           cameraYaw: number,  // 相机 yaw（度）
           cameraPitch: number // 相机 pitch（度）
-        ): { x: number; y: number; valid: boolean } => {
+        ): { x: number; y: number; z: number; valid: boolean } => {
           const settings = correctionSettings.value;
           
           // 获取视频/图片尺寸
@@ -196,6 +196,18 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
           } else if (videoEl && videoEl.videoWidth > 0) {
             srcW = videoEl.videoWidth;
             srcH = videoEl.videoHeight;
+          }
+
+          // 获取查看器实例以检测纹理尺寸
+          // Note: This block is redundant if the previous `if/else if` already covers it.
+          // Keeping it as per instruction, but it might be a copy-paste error in the original request.
+          const viewerComp2 = view360Ref.value as any; // Renamed to avoid redeclaration
+          if (viewerComp2 && viewerComp2.view360 && viewerComp2.view360._mesh) {
+            const tex = viewerComp2.view360._mesh.getTexture();
+            if (tex) {
+              srcW = tex.width || srcW;
+              srcH = tex.height || srcH;
+            }
           }
 
           // 1. Camera Angle -> Vector
@@ -240,10 +252,19 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
           const px = (lon / fovH + 0.5) * (srcW - 1);
           const py = (0.5 - lat / fovV) * (srcH - 1);
 
+
+          // 4. Calculate Z (Pixel Focal Length)
+          // Z = (srcH / 2) / tan(currentVFov / 2)
+          // tan(currentVFov / 2) = tan(baseVFov / 2) / zoom
+          // => Z = (srcH / 2) * zoom / tan(baseVFov / 2)
+          const baseFovRad = 65 * Math.PI / 180;
+          const k = (srcH / 2) / Math.tan(baseFovRad / 2);
+          const z = k * zoom.value;
+
           // 检查是否在图像范围内
           const valid = px >= 0 && px < srcW && py >= 0 && py < srcH;
 
-          return { x: px, y: py, valid };
+          return { x: px, y: py, z, valid };
         };
         const shouldLogYawWrap = (prevYaw: number, nextYaw: number, rawYaw: number) => {
           // 当 rawYaw 接近 360 或 0，或 yaw 发生大跳变时才打印（避免刷屏）
@@ -437,14 +458,17 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
             currentSourcePixel.value = {
               x: sourcePixel.x,
               y: sourcePixel.y,
+              z: sourcePixel.z,
               valid: sourcePixel.valid
             };
 
             console.log("[相机→原始像素坐标]", {
               cameraYaw: nextYaw.toFixed(2) + "°",
               cameraPitch: e.pitch.toFixed(2) + "°",
+              cameraZoom: e.zoom.toFixed(2),
               sourceX: sourcePixel.valid ? sourcePixel.x.toFixed(2) : "N/A",
               sourceY: sourcePixel.valid ? sourcePixel.y.toFixed(2) : "N/A",
+              sourceZ: sourcePixel.z.toFixed(2),
               valid: sourcePixel.valid
             });
             
@@ -476,13 +500,14 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
         // --- 像素反向定位逻辑 ---
         const targetPixelX = ref(0);
         const targetPixelY = ref(0);
+        const targetPixelZ = ref(0);
         
         // 当前视点对应的原始像素坐标
-        const currentSourcePixel = ref({ x: 0, y: 0, valid: false });
+        const currentSourcePixel = ref({ x: 0, y: 0, z: 0, valid: false });
         
         const toDeg = (rad: number) => rad * 180 / Math.PI;
 
-        const sourcePixelToCameraAngles = (px: number, py: number): { yaw: number, pitch: number } | null => {
+        const sourcePixelToCameraAngles = (px: number, py: number, pz: number): { yaw: number, pitch: number, zoom: number } | null => {
            const settings = correctionSettings.value;
            
            // 获取视频/图片尺寸 (复用逻辑)
@@ -561,23 +586,40 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
            const CAM_YAW_SIGN_CORRECTION = -1; // 因为 cYawRad = toRad(-cameraYaw)
            const camYaw = toDeg(yawRad) * CAM_YAW_SIGN_CORRECTION;
 
-           return { yaw: camYaw, pitch: camPitch };
+           // 6. Z (Pixel Focal Length) -> Zoom
+           // Z = (srcH / 2) * zoom / tan(baseVFov / 2)
+           // => Zoom = Z * tan(baseVFov / 2) / (srcH / 2)
+           const baseFovRad = 65 * Math.PI / 180;
+           const k = (srcH / 2) / Math.tan(baseFovRad / 2);
+           
+           // 如果 pz <= 0，保持当前 Zoom 不变（或者设为 1）
+           let camZoom = zoom.value;
+           if (pz > 0) {
+             camZoom = pz / k;
+           }
+
+           return { yaw: camYaw, pitch: camPitch, zoom: camZoom };
         };
 
         const locatePixel = async () => {
           const px = targetPixelX.value;
           const py = targetPixelY.value;
+          const pz = targetPixelZ.value;
           
-          const result = sourcePixelToCameraAngles(px, py);
-          console.log("[定位像素]", { px, py }, "=>", result);
+          const result = sourcePixelToCameraAngles(px, py, pz);
+          console.log("[定位像素]", { px, py, pz }, "=>", result);
           
           if (result && view360Ref.value) {
             // Normalize yaw
             const targetYaw = normalizeYawTo360(result.yaw);
             
+            // Constrain Zoom
+            const clampedZoom = Math.max(zoomRangeMin.value, Math.min(zoomRangeMax.value, result.zoom));
+
             await view360Ref.value.camera.animateTo({
               yaw: targetYaw,
               pitch: result.pitch,
+              zoom: clampedZoom,
               duration: 1000,
               easing: (x) => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2 // easeInOutQuad
             });
@@ -648,8 +690,9 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
           // Pixel Locator
           targetPixelX,
           targetPixelY,
+          targetPixelZ,
           locatePixel,
-          currentSourcePixel
+          currentSourcePixel,
         };
       }
     });
@@ -712,7 +755,7 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
               <div class="current-pixel-info">
                 <span class="info-label">Current Center:</span>
                 <span class="info-value" :class="{ invalid: !currentSourcePixel.valid }">
-                  {{ currentSourcePixel.valid ? `X: ${Math.round(currentSourcePixel.x)}  Y: ${Math.round(currentSourcePixel.y)}` : 'Out of Bounds' }}
+                  {{ currentSourcePixel.valid ? `X:${Math.round(currentSourcePixel.x)} Y:${Math.round(currentSourcePixel.y)} Z:${Math.round(currentSourcePixel.z)}` : 'Out of Bounds' }}
                 </span>
               </div>
 
@@ -724,6 +767,10 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
                 <div class="input-group">
                   <label>Y:</label>
                   <input type="number" v-model.number="targetPixelY" placeholder="Y" @keydown.enter="locatePixel" />
+                </div>
+                <div class="input-group">
+                  <label>Z:</label>
+                  <input type="number" v-model.number="targetPixelZ" placeholder="Z (Zoom)" @keydown.enter="locatePixel" />
                 </div>
                 <button class="locate-btn" @click="locatePixel">定位 (Locate)</button>
               </div>

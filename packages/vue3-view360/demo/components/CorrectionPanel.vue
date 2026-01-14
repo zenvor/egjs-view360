@@ -152,17 +152,13 @@ export default defineComponent({
 /* 矫正参数面板 */
 .correction-panel {
   position: relative;
-  width: 320px;
-  height: 100%; /* Fill sidebar height */
-  flex-shrink: 0;
+  width: 100%;
   background: rgba(15, 15, 20, 0.85);
   backdrop-filter: blur(10px);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #fff;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
 }
 
 .panel-header {
@@ -185,7 +181,6 @@ export default defineComponent({
 
 .panel-content {
   padding: 16px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -311,6 +306,7 @@ export default defineComponent({
   flex: 1;
   height: 6px;
   -webkit-appearance: none;
+  appearance: none;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
   outline: none;

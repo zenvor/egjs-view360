@@ -36,7 +36,8 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
           showSidebar: true,
           showMinimap: false,
           showControls: true,
-          showPreview: false
+          showPreview: false,
+          showCrosshair: true
         });
 
         // 资源源
@@ -431,6 +432,14 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
 
             // 计算相机中心视点对应的原始视频像素坐标
             const sourcePixel = cameraToSourcePixel(nextYaw, e.pitch);
+            
+            // 更新 UI 显示
+            currentSourcePixel.value = {
+              x: sourcePixel.x,
+              y: sourcePixel.y,
+              valid: sourcePixel.valid
+            };
+
             console.log("[相机→原始像素坐标]", {
               cameraYaw: nextYaw.toFixed(2) + "°",
               cameraPitch: e.pitch.toFixed(2) + "°",
@@ -467,6 +476,10 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
         // --- 像素反向定位逻辑 ---
         const targetPixelX = ref(0);
         const targetPixelY = ref(0);
+        
+        // 当前视点对应的原始像素坐标
+        const currentSourcePixel = ref({ x: 0, y: 0, valid: false });
+        
         const toDeg = (rad: number) => rad * 180 / Math.PI;
 
         const sourcePixelToCameraAngles = (px: number, py: number): { yaw: number, pitch: number } | null => {
@@ -635,7 +648,8 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
           // Pixel Locator
           targetPixelX,
           targetPixelY,
-          locatePixel
+          locatePixel,
+          currentSourcePixel
         };
       }
     });
@@ -681,6 +695,10 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
             <input type="checkbox" v-model="uiConfig.showPreview">
             <span>Result Preview</span>
           </label>
+          <label class="setting-item">
+            <input type="checkbox" v-model="uiConfig.showCrosshair">
+            <span>Debug Crosshair</span>
+          </label>
         </div>
 
         <div class="layout-grid">
@@ -689,6 +707,15 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
             <!-- 0. 像素定位器 -->
             <div class="pixel-locator-panel">
               <div class="panel-header">像素定位 (Pixel Locator)</div>
+              
+              <!-- Current Viewer Center Info -->
+              <div class="current-pixel-info">
+                <span class="info-label">Current Center:</span>
+                <span class="info-value" :class="{ invalid: !currentSourcePixel.valid }">
+                  {{ currentSourcePixel.valid ? `X: ${Math.round(currentSourcePixel.x)}  Y: ${Math.round(currentSourcePixel.y)}` : 'Out of Bounds' }}
+                </span>
+              </div>
+
               <div class="locator-controls">
                 <div class="input-group">
                   <label>X:</label>
@@ -730,6 +757,14 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
                 <div v-if="isLoading" class="loading-overlay">
                   <div class="spinner"></div>
                   <span>加载中...</span>
+                </div>
+
+                <!-- 十字准星 (仅调试用) -->
+                <div v-if="uiConfig.showCrosshair" class="view-crosshair">
+                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="4" x2="12" y2="20"></line>
+                    <line x1="4" y1="12" x2="20" y2="12"></line>
+                  </svg>
                 </div>
     
                 <!-- 扫描预览 (Viewer 内部右上角) -->
@@ -954,6 +989,32 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
   padding-bottom: 8px;
 }
 
+.current-pixel-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 8px 10px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+.current-pixel-info .info-label {
+  color: #aaa;
+  font-size: 11px;
+}
+
+.current-pixel-info .info-value {
+  color: #4ade80; /* Green for valid */
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.current-pixel-info .info-value.invalid {
+  color: #ef4444; /* Red for invalid */
+}
+
 .locator-controls {
   display: flex;
   flex-direction: column;
@@ -1011,14 +1072,32 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
   gap: 20px;
   width: 320px;
   flex-shrink: 0;
-  height: 100%;
-  transition: width 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
-  overflow-y: auto; /* Allow scrolling if content is too tall */
 }
 
 .sidebar-panel {
   /* Remove fill-height constraint if strictly enforcing layout issues */
   flex-shrink: 0; 
+}
+
+/* Debug Crosshair */
+.view-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 100;
+  color: rgba(255, 255, 255, 0.8);
+  filter: drop-shadow(0 0 2px rgba(0,0,0,0.5));
+}
+
+.view-crosshair svg {
+  width: 100%;
+  height: 100%;
+  stroke: #ff3b30; /* Vivid Red */
+  stroke-width: 1.5;
 }
 
 /* Bottom Controls Container */

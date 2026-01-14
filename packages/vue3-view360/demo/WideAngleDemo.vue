@@ -1,15 +1,15 @@
 <script lang="ts">
 /**
- * Wide Angle Correction Projection 通用 Demo
- * 用于验证 WideAngleCorrectionProjection 对视频/图片的支持
+ * Wide Angle Realtime Projection 通用 Demo
+ * 用于验证 WideAngleRealtimeProjection 对视频/图片的支持
  */
 import { defineComponent, ref, shallowRef, markRaw, watch, onUnmounted, computed } from "vue";
-import { View360, WideAngleCorrectionProjection, Projection, ReadyEvent } from "../src/index";
+import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "../src/index";
 
 // 使用 Vite 静态资源导入
 // @ts-ignore
     // @ts-ignore
-    import wideAngleDemoVideo from "./static/output_fast.mp4?url";
+    import wideAngleDemoVideo from "./static/output_2160p.mp4?url";
     // @ts-ignore
     import wideAngleDemoImage from "./static/vlcsnap-2026-01-12-19h08m25s542.png?url";
 
@@ -54,6 +54,7 @@ import { View360, WideAngleCorrectionProjection, Projection, ReadyEvent } from "
         const projection = shallowRef<Projection | null>(null);
 
         // --- 矫正参数 (Correction Params) ---
+        // 使用 WideAngleRealtimeProjection 无需配置 outputWidth/outputHeight
         const correctionSettings = ref<CorrectionSettings>({
           mode: "erp",
           yaw: 0,
@@ -61,9 +62,7 @@ import { View360, WideAngleCorrectionProjection, Projection, ReadyEvent } from "
           roll: 0.5,
           hfov: 165,
           vfov: 53,
-          fisheyeFov: 180,
-          outputWidth: 15360,
-          outputHeight: 7680
+          fisheyeFov: 180
         });
 
         // --- 相机控制参数 (Camera Controls) ---
@@ -172,7 +171,9 @@ import { View360, WideAngleCorrectionProjection, Projection, ReadyEvent } from "
 
           try {
             const s = correctionSettings.value;
-            projection.value = markRaw(new WideAngleCorrectionProjection({
+            // 使用优化后的 WideAngleRealtimeProjection，直接在球体渲染时完成矫正
+            // 无需离屏 FBO，性能更好，无需配置输出分辨率
+            projection.value = markRaw(new WideAngleRealtimeProjection({
               src: url,
               video: isVideoSource.value,
               mode: s.mode,
@@ -181,9 +182,7 @@ import { View360, WideAngleCorrectionProjection, Projection, ReadyEvent } from "
               roll: s.roll,
               hfov: s.hfov,
               vfov: s.vfov,
-              fisheyeFov: s.fisheyeFov,
-              outputWidth: s.outputWidth,
-              outputHeight: s.outputHeight
+              fisheyeFov: s.fisheyeFov
             }));
           } catch (err) {
             errorMessage.value = String(err);

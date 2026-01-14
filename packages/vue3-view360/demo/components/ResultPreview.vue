@@ -1,7 +1,8 @@
 <script lang="ts">
 import { defineComponent, ref, PropType, shallowRef, watch, markRaw, onMounted } from "vue";
-import { View360, WideAngleCorrectionProjection, Projection } from "../../src/index";
+import { View360, WideAngleRealtimeProjection, Projection } from "../../src/index";
 
+// 使用 WideAngleRealtimeProjection 无需配置输出分辨率
 export interface CorrectionSettings {
   mode: "erp" | "fisheye";
   yaw: number;
@@ -10,8 +11,6 @@ export interface CorrectionSettings {
   hfov: number;
   vfov: number;
   fisheyeFov: number;
-  outputWidth: number;
-  outputHeight: number;
 }
 
 export default defineComponent({
@@ -48,9 +47,9 @@ export default defineComponent({
       }
       
       try {
-        console.log("[ResultPreview] Initializing projection with settings:", props.settings);
+        // 使用实时矫正 Projection，无需配置输出分辨率
         const s = props.settings;
-        previewProjection.value = markRaw(new WideAngleCorrectionProjection({
+        previewProjection.value = markRaw(new WideAngleRealtimeProjection({
           src: props.src,
           video: props.isVideo,
           mode: s.mode,
@@ -60,9 +59,6 @@ export default defineComponent({
           hfov: s.hfov,
           vfov: s.vfov,
           fisheyeFov: s.fisheyeFov,
-          outputWidth: 512,
-          outputHeight: Math.floor(512 * (s.outputHeight / s.outputWidth)),
-          // @ts-ignore: Temporary fix
           flatProjection: true
         }));
         errorMessage.value = "";
@@ -98,9 +94,10 @@ export default defineComponent({
 
     const updateCamera = (viewer: any, settings: CorrectionSettings) => {
       if (!viewer || !viewer.camera) return;
-
+      
+      // 实时矫正模式下，使用默认 2:1 平面比例
       const planeHeight = 1.0;
-      const outputAspect = settings.outputWidth / settings.outputHeight; 
+      const outputAspect = 2.0; // 标准 ERP 2:1 比例
       const planeWidth = planeHeight * outputAspect;
 
       const radV = 2 * Math.atan(planeHeight / 2);

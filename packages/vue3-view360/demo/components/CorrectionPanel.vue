@@ -1,6 +1,7 @@
 <script lang="ts">
 import { defineComponent, ref, PropType, watch } from "vue";
 
+// 使用 WideAngleRealtimeProjection 无需配置输出分辨率
 export interface CorrectionSettings {
   mode: "erp" | "fisheye";
   yaw: number;
@@ -9,8 +10,6 @@ export interface CorrectionSettings {
   hfov: number;
   vfov: number;
   fisheyeFov: number;
-  outputWidth: number;
-  outputHeight: number;
 }
 
 export default defineComponent({
@@ -139,19 +138,6 @@ export default defineComponent({
           <input type="range" v-model.number="localSettings.fisheyeFov" min="10" max="360" />
           <input type="number" v-model.number="localSettings.fisheyeFov" class="row-num-input" />
           <span class="unit">deg</span>
-        </div>
-      </div>
-
-      <div class="control-group">
-        <span class="group-label">TEXTURE SIZE</span>
-        <span class="group-hint">矫正后的全景纹理分辨率，建议 4096x2048 以上</span>
-        <div class="input-row compact">
-          <label>W</label>
-          <input type="number" v-model.number="localSettings.outputWidth" step="256" min="512" />
-        </div>
-        <div class="input-row compact">
-          <label>H</label>
-          <input type="number" v-model.number="localSettings.outputHeight" step="128" min="256" />
         </div>
       </div>
 

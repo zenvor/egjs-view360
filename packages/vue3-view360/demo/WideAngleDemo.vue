@@ -464,19 +464,125 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
           }
         }
 
-        function onLoadStart() {
+        // --- 像素反向定位逻辑 ---
+        const targetPixelX = ref(0);
+        const targetPixelY = ref(0);
+        const toDeg = (rad: number) => rad * 180 / Math.PI;
+
+        const sourcePixelToCameraAngles = (px: number, py: number): { yaw: number, pitch: number } | null => {
+           const settings = correctionSettings.value;
+           
+           // 获取视频/图片尺寸 (复用逻辑)
+           const videoEl = getVideoElement();
+           let srcW = 3840, srcH = 2160;
+           
+           const viewerComp = view360Ref.value as any;
+           if (viewerComp && viewerComp.view360 && viewerComp.view360._mesh) {
+             const tex = viewerComp.view360._mesh.getTexture();
+             if (tex) {
+               srcW = tex.width || srcW;
+               srcH = tex.height || srcH;
+             }
+           } else if (videoEl && videoEl.videoWidth > 0) {
+             srcW = videoEl.videoWidth;
+             srcH = videoEl.videoHeight;
+           }
+
+           // 1. Pixel -> UV
+           // center_x = fixed_center_x + (lon / fovH) * (srcW - 1)
+           // (center_x - fixed_center_x) / (srcW - 1) * fovH = lon
+           const fixedCenterX = (srcW - 1) / 2;
+           const fixedCenterY = (srcH - 1) / 2;
+           
+           const fovH = Math.max(1e-6, settings.hfov);
+           const fovV = Math.max(1e-6, settings.vfov);
+           
+           // 反解 lon/lat (角度)
+           const lonDeg = ((px - fixedCenterX) / (srcW - 1)) * fovH;
+           // Y轴反转：屏幕 Y 向下增大，Latitude 向上增大
+           const latDeg = -((py - fixedCenterY) / (srcH - 1)) * fovV;
+           
+           // 转换为弧度
+           const lon = toRad(lonDeg);
+           const lat = toRad(latDeg);
+
+           // 3. Spherical -> Source Vector Vsrc
+           // 对应 Shader/Forward 逻辑:
+           // cosLat = cos(lat), sinLat = sin(lat)
+           // worldDir = (cosLat*sinPhi, sinLat, cosLat*cosPhi)
+           // 此处的 Phi 对应 lon, Lat 对应 lat
+           const cosLat = Math.cos(lat), sinLat = Math.sin(lat);
+           const sinLon = Math.sin(lon), cosLon = Math.cos(lon);
+           // Vsrc = [x, y, z]
+           const Vsrc = [cosLat * sinLon, sinLat, cosLat * cosLon];
+
+           // 4. Apply Correction (Forward)
+           // Forward: imgDir = Rinv * worldDir (Camera Space) -> 这里命名有点混淆
+           // 让我们理清前面的 Forward 变换：
+           // Camera Space (WorldDir) --[Rinv]--> Source Space (imgDir) --[Mapping]--> Pixel
+           // 现在我们要反过来: Pixel --[Inverse Mapping]--> Source Space (imgDir) --[R]--> Camera Space (WorldDir)
+           // Vsrc 即为上面的 imgDir
+           // Vcam 即为上面的 WorldDir
+           // Vcam = R * Vsrc
+           
+           const rYawRad = toRad(-settings.yaw);
+           const rPitchRad = toRad(-settings.pitch);
+           const rRollRad = toRad(settings.roll);
+           
+           const R = buildRotationMatrix(rYawRad, rPitchRad, rRollRad);
+           const Vcam = mulMatVec(R, Vsrc);
+
+           // 5. Vcam -> Camera Angles
+           // Vcam = [cp * sy, sp, cp * cy]  where y=-yaw, p=pitch
+           // y = sp
+           // x = cp * sy
+           // z = cp * cy
+           const camX = Vcam[0];
+           const camY = Vcam[1];
+           const camZ = Vcam[2];
+
+           const pitchRad = Math.asin(Math.max(-1, Math.min(1, camY)));
+           const yawRad = Math.atan2(camX, camZ);
+
+           const camPitch = toDeg(pitchRad);
+           const CAM_YAW_SIGN_CORRECTION = -1; // 因为 cYawRad = toRad(-cameraYaw)
+           const camYaw = toDeg(yawRad) * CAM_YAW_SIGN_CORRECTION;
+
+           return { yaw: camYaw, pitch: camPitch };
+        };
+
+        const locatePixel = async () => {
+          const px = targetPixelX.value;
+          const py = targetPixelY.value;
+          
+          const result = sourcePixelToCameraAngles(px, py);
+          console.log("[定位像素]", { px, py }, "=>", result);
+          
+          if (result && view360Ref.value) {
+            // Normalize yaw
+            const targetYaw = normalizeYawTo360(result.yaw);
+            
+            await view360Ref.value.camera.animateTo({
+              yaw: targetYaw,
+              pitch: result.pitch,
+              duration: 1000,
+              easing: (x) => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2 // easeInOutQuad
+            });
+          }
+        };
+        const onLoadStart = () => {
           isLoading.value = true;
-        }
+        };
 
-        function onLoad() {
+        const onLoad = () => {
           isLoading.value = false;
-        }
+        };
 
-        function onError(err: Error) {
+        const onError = (err: Error) => {
           console.error("View360 Error:", err);
           errorMessage.value = err.message;
           isLoading.value = false;
-        }
+        };
 
         // 初始加载
         createProjection(currentVideoUrl.value);
@@ -522,7 +628,14 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
 
           applyCorrectionSettings,
           
-          currentCameraFov
+
+          
+          currentCameraFov,
+
+          // Pixel Locator
+          targetPixelX,
+          targetPixelY,
+          locatePixel
         };
       }
     });
@@ -573,12 +686,28 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
         <div class="layout-grid">
           <!-- 左侧边栏 -->
           <aside class="left-sidebar" v-if="uiConfig.showSidebar">
+            <!-- 0. 像素定位器 -->
+            <div class="pixel-locator-panel">
+              <div class="panel-header">像素定位 (Pixel Locator)</div>
+              <div class="locator-controls">
+                <div class="input-group">
+                  <label>X:</label>
+                  <input type="number" v-model.number="targetPixelX" placeholder="X" @keydown.enter="locatePixel" />
+                </div>
+                <div class="input-group">
+                  <label>Y:</label>
+                  <input type="number" v-model.number="targetPixelY" placeholder="Y" @keydown.enter="locatePixel" />
+                </div>
+                <button class="locate-btn" @click="locatePixel">定位 (Locate)</button>
+              </div>
+            </div>
+
             <!-- 1. 矫正参数 (占据全高) -->
             <CorrectionPanel 
               v-model="correctionSettings"
               v-model:sourceType="sourceType"
               @apply="applyCorrectionSettings"
-              class="sidebar-panel fill-height"
+              class="sidebar-panel"
             />
           </aside>
     
@@ -804,7 +933,78 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
   font-size: 14px;
 }
 
-/* Left Sidebar */
+/* Pixel Locator Panel */
+.pixel-locator-panel {
+  background: rgba(30, 30, 30, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel-header {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+}
+
+.locator-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.input-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-group label {
+  color: #aaa;
+  font-size: 12px;
+  width: 20px;
+}
+
+.input-group input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: #fff;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.input-group input:focus {
+  border-color: #6366f1;
+  outline: none;
+}
+
+.locate-btn {
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 4px;
+}
+
+.locate-btn:hover {
+  background: #4f46e5;
+}
+
+/* Sidebar Styles */
 .left-sidebar {
   display: flex;
   flex-direction: column;
@@ -813,6 +1013,12 @@ import { View360, WideAngleRealtimeProjection, Projection, ReadyEvent } from "..
   flex-shrink: 0;
   height: 100%;
   transition: width 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+  overflow-y: auto; /* Allow scrolling if content is too tall */
+}
+
+.sidebar-panel {
+  /* Remove fill-height constraint if strictly enforcing layout issues */
+  flex-shrink: 0; 
 }
 
 /* Bottom Controls Container */

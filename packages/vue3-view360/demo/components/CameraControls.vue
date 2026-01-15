@@ -95,7 +95,7 @@ export default defineComponent({
             <span class="material-symbols-outlined">chevron_right</span>
           </button>
         </div>
-        <div class="value-display bg-green">{{ yaw }}°</div>
+        <div class="value-display bg-green">{{ Math.round(yaw) }}°</div>
       </div>
 
       <!-- Pitch (紫色) -->
@@ -116,7 +116,7 @@ export default defineComponent({
             :style="({ '--value': (((pitch + 90) / 180) * 100) + '%' } as any)"
           />
         </div>
-        <div class="value-display bg-purple">{{ pitch }}°</div>
+        <div class="value-display bg-purple">{{ Math.round(pitch) }}°</div>
       </div>
     </div>
   </div>

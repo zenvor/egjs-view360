@@ -133,6 +133,8 @@ class WideAngleCorrectionProjection extends Projection {
     }
 
     const gl = ctx.gl;
+    // 打印纹理尺寸与 GPU 限制，便于排查清晰度问题
+    console.info("WideAngleCorrectionProjection 输出纹理尺寸:", this._outputWidth, "x", this._outputHeight, "输入纹理尺寸:", texture.width, "x", texture.height, "GPU 最大纹理尺寸:", ctx.maxTextureSize);
     // 根据宽高比计算平面尺寸，保持高度为 1
     const aspect = this._outputWidth / this._outputHeight;
 

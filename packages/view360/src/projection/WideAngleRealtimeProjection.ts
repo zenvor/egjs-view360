@@ -19,22 +19,17 @@ import vs from "../shader/wideangle_realtime.vert";
 import fs from "../shader/wideangle_realtime.frag";
 
 /**
- * Options for {@link WideAngleRealtimeProjection}
- * @ko {@link WideAngleRealtimeProjection}의 옵션들
+ * 矫正参数配置
+ * @ko 보정 매개변수 설정
  * @since 4.0.0
  * @category Projection
  */
-export interface WideAngleRealtimeOptions extends ProjectionOptions {
+export interface CorrectionParams {
   /**
    * 输入图像模式：erp(等距柱状) 或 fisheye(鱼眼)
    * @default "erp"
    */
   mode?: "erp" | "fisheye";
-  /**
-   * 是否使用平面投影模式展示结果（而非 360 球体）
-   * @default false
-   */
-  flatProjection?: boolean;
   /**
    * Yaw 旋转角度（度）
    * @default 0
@@ -67,8 +62,43 @@ export interface WideAngleRealtimeOptions extends ProjectionOptions {
   fisheyeFov?: number;
 }
 
+/**
+ * Options for {@link WideAngleRealtimeProjection}
+ * @ko {@link WideAngleRealtimeProjection}의 옵션들
+ * @since 4.0.0
+ * @category Projection
+ */
+export interface WideAngleRealtimeOptions extends ProjectionOptions {
+  /**
+   * 矫正参数配置
+   * @ko 보정 매개변수
+   */
+  correction?: CorrectionParams;
+  /**
+   * 是否使用平面投影模式展示结果（而非 360 球体）
+   * @default false
+   */
+  flatProjection?: boolean;
+
+  // --- Deprecated: Legacy flat parameters (use 'correction' object instead) ---
+  /** @deprecated Use correction.mode instead */
+  mode?: "erp" | "fisheye";
+  /** @deprecated Use correction.yaw instead */
+  yaw?: number;
+  /** @deprecated Use correction.pitch instead */
+  pitch?: number;
+  /** @deprecated Use correction.roll instead */
+  roll?: number;
+  /** @deprecated Use correction.hfov instead */
+  hfov?: number;
+  /** @deprecated Use correction.vfov instead */
+  vfov?: number;
+  /** @deprecated Use correction.fisheyeFov instead */
+  fisheyeFov?: number;
+}
+
 // 角度转弧度
-const toRad = (deg: number) => deg * Math.PI / 180;
+const toRad = (deg: number) => (deg * Math.PI) / 180;
 
 /**
  * 实时宽角矫正纹理 Uniform
@@ -96,7 +126,11 @@ class RealtimeCorrectionTextureUniform extends Uniform {
     glCtx.deleteTexture(this._webglTexture);
   }
 
-  public update(glCtx: WebGLRenderingContext | WebGL2RenderingContext, location: WebGLUniformLocation, isWebGL2: boolean) {
+  public update(
+    glCtx: WebGLRenderingContext | WebGL2RenderingContext,
+    location: WebGLUniformLocation,
+    isWebGL2: boolean
+  ) {
     const tex = this.texture;
     const isVideo = tex.isVideo();
 
@@ -110,13 +144,20 @@ class RealtimeCorrectionTextureUniform extends Uniform {
     if (isVideo) {
       const videoEl = tex.source as HTMLVideoElement;
       // 视频尺寸可能在播放后才可用
-      if (videoEl.readyState < 2 || videoEl.videoWidth <= 0 || videoEl.videoHeight <= 0) {
+      if (
+        videoEl.readyState < 2 ||
+        videoEl.videoWidth <= 0 ||
+        videoEl.videoHeight <= 0
+      ) {
         this._uploadPlaceholder(glCtx);
         return;
       }
       if (this._imgSizeUniform) {
         const curSize = this._imgSizeUniform.val;
-        if (curSize[0] !== videoEl.videoWidth || curSize[1] !== videoEl.videoHeight) {
+        if (
+          curSize[0] !== videoEl.videoWidth ||
+          curSize[1] !== videoEl.videoHeight
+        ) {
           this._imgSizeUniform.val = [videoEl.videoWidth, videoEl.videoHeight];
           this._imgSizeUniform.needsUpdate = true;
         }
@@ -124,9 +165,24 @@ class RealtimeCorrectionTextureUniform extends Uniform {
     }
 
     if (!isVideo && isWebGL2) {
-      glCtx.texSubImage2D(glCtx.TEXTURE_2D, 0, 0, 0, glCtx.RGBA, glCtx.UNSIGNED_BYTE, tex.source);
+      glCtx.texSubImage2D(
+        glCtx.TEXTURE_2D,
+        0,
+        0,
+        0,
+        glCtx.RGBA,
+        glCtx.UNSIGNED_BYTE,
+        tex.source
+      );
     } else {
-      glCtx.texImage2D(glCtx.TEXTURE_2D, 0, glCtx.RGBA, glCtx.RGBA, glCtx.UNSIGNED_BYTE, tex.source);
+      glCtx.texImage2D(
+        glCtx.TEXTURE_2D,
+        0,
+        glCtx.RGBA,
+        glCtx.RGBA,
+        glCtx.UNSIGNED_BYTE,
+        tex.source
+      );
     }
 
     this._initialized = true;
@@ -135,7 +191,9 @@ class RealtimeCorrectionTextureUniform extends Uniform {
     }
   }
 
-  private _uploadPlaceholder(glCtx: WebGLRenderingContext | WebGL2RenderingContext) {
+  private _uploadPlaceholder(
+    glCtx: WebGLRenderingContext | WebGL2RenderingContext
+  ) {
     if (this._initialized) {
       return;
     }
@@ -213,18 +271,22 @@ class WideAngleRealtimeProjection extends Projection {
   public constructor(options: WideAngleRealtimeOptions) {
     super(options);
 
-    this._mode = options.mode ?? "erp";
+    // 优先使用新的 correction 对象，若不存在则回退到旧版扁平参数（向后兼容）
+    const correction = options.correction || {};
+    this._mode = correction.mode ?? options.mode ?? "erp";
     this._flatProjection = options.flatProjection ?? false;
-    this._yaw = options.yaw ?? 0;
-    this._pitch = options.pitch ?? 0;
-    this._roll = options.roll ?? 0;
-    this._hfov = options.hfov ?? 180;
-    this._vfov = options.vfov ?? 90;
-    this._fisheyeFov = options.fisheyeFov ?? 180;
+    this._yaw = correction.yaw ?? options.yaw ?? 0;
+    this._pitch = correction.pitch ?? options.pitch ?? 0;
+    this._roll = correction.roll ?? options.roll ?? 0;
+    this._hfov = correction.hfov ?? options.hfov ?? 180;
+    this._vfov = correction.vfov ?? options.vfov ?? 90;
+    this._fisheyeFov = correction.fisheyeFov ?? options.fisheyeFov ?? 180;
   }
 
   // 属性 getter/setter，用于运行时动态更新参数
-  public get mode() { return this._mode; }
+  public get mode() {
+    return this._mode;
+  }
   public set mode(val: "erp" | "fisheye") {
     this._mode = val;
     if (this._uniforms.uMode) {
@@ -233,25 +295,33 @@ class WideAngleRealtimeProjection extends Projection {
     }
   }
 
-  public get yaw() { return this._yaw; }
+  public get yaw() {
+    return this._yaw;
+  }
   public set yaw(val: number) {
     this._yaw = val;
     this._updateRotation();
   }
 
-  public get pitch() { return this._pitch; }
+  public get pitch() {
+    return this._pitch;
+  }
   public set pitch(val: number) {
     this._pitch = val;
     this._updateRotation();
   }
 
-  public get roll() { return this._roll; }
+  public get roll() {
+    return this._roll;
+  }
   public set roll(val: number) {
     this._roll = val;
     this._updateRotation();
   }
 
-  public get hfov() { return this._hfov; }
+  public get hfov() {
+    return this._hfov;
+  }
   public set hfov(val: number) {
     this._hfov = val;
     if (this._uniforms.uHFov) {
@@ -260,7 +330,9 @@ class WideAngleRealtimeProjection extends Projection {
     }
   }
 
-  public get vfov() { return this._vfov; }
+  public get vfov() {
+    return this._vfov;
+  }
   public set vfov(val: number) {
     this._vfov = val;
     if (this._uniforms.uVFov) {
@@ -269,7 +341,9 @@ class WideAngleRealtimeProjection extends Projection {
     }
   }
 
-  public get fisheyeFov() { return this._fisheyeFov; }
+  public get fisheyeFov() {
+    return this._fisheyeFov;
+  }
   public set fisheyeFov(val: number) {
     this._fisheyeFov = val;
     if (this._uniforms.uFisheyeFov) {
@@ -280,7 +354,9 @@ class WideAngleRealtimeProjection extends Projection {
 
   public createMesh(ctx: WebGLContext, texture: Texture): TriangleMesh {
     if (texture.isCube()) {
-      throw new Error("WideAngleRealtimeProjection 仅支持单张 2D 图像，不支持 Cubemap 纹理");
+      throw new Error(
+        "WideAngleRealtimeProjection 仅支持单张 2D 图像，不支持 Cubemap 纹理"
+      );
     }
 
     const tex2d = texture as Texture2D;
@@ -289,16 +365,28 @@ class WideAngleRealtimeProjection extends Projection {
     const maxSize = ctx.maxTextureSize;
     if (texture.width > maxSize || texture.height > maxSize) {
       throw new Error(
-        "输入纹理尺寸 (" + texture.width + "x" + texture.height + ") 超过 GPU 最大纹理尺寸限制 (" + maxSize + "x" + maxSize + ")。" +
-        "请使用更小的图片或在支持更大纹理的设备上运行。"
+        "输入纹理尺寸 (" +
+          texture.width +
+          "x" +
+          texture.height +
+          ") 超过 GPU 最大纹理尺寸限制 (" +
+          maxSize +
+          "x" +
+          maxSize +
+          ")。" +
+          "请使用更小的图片或在支持更大纹理的设备上运行。"
       );
     }
 
     if (ctx.debug) {
       console.info(
         "WideAngleRealtimeProjection 实时矫正模式",
-        "输入纹理尺寸:", texture.width, "x", texture.height,
-        "GPU 最大纹理尺寸:", ctx.maxTextureSize
+        "输入纹理尺寸:",
+        texture.width,
+        "x",
+        texture.height,
+        "GPU 最大纹理尺寸:",
+        ctx.maxTextureSize
       );
     }
 
@@ -310,7 +398,11 @@ class WideAngleRealtimeProjection extends Projection {
 
     // 创建所有 uniforms
     const uMode = new UniformInt(this._mode === "fisheye" ? 1 : 0);
-    const uRotYPR = new UniformVec3(toRad(-this._yaw), toRad(-this._pitch), toRad(this._roll));
+    const uRotYPR = new UniformVec3(
+      toRad(-this._yaw),
+      toRad(-this._pitch),
+      toRad(this._roll)
+    );
     const uHFov = new UniformFloat(toRad(this._hfov));
     const uVFov = new UniformFloat(toRad(this._vfov));
     const uFisheyeFov = new UniformFloat(toRad(this._fisheyeFov));
@@ -319,13 +411,19 @@ class WideAngleRealtimeProjection extends Projection {
     if (ctx.debug) {
       console.info("[WideAngleRealtimeProjection] Uniforms:", {
         mode: this._mode,
-        yaw: this._yaw, yawRad: toRad(-this._yaw),
-        pitch: this._pitch, pitchRad: toRad(-this._pitch),
-        roll: this._roll, rollRad: toRad(this._roll),
-        hfov: this._hfov, hfovRad: toRad(this._hfov),
-        vfov: this._vfov, vfovRad: toRad(this._vfov),
-        fisheyeFov: this._fisheyeFov, fisheyeFovRad: toRad(this._fisheyeFov),
-        imgSize: [texture.width, texture.height]
+        yaw: this._yaw,
+        yawRad: toRad(-this._yaw),
+        pitch: this._pitch,
+        pitchRad: toRad(-this._pitch),
+        roll: this._roll,
+        rollRad: toRad(this._roll),
+        hfov: this._hfov,
+        hfovRad: toRad(this._hfov),
+        vfov: this._vfov,
+        vfovRad: toRad(this._vfov),
+        fisheyeFov: this._fisheyeFov,
+        fisheyeFovRad: toRad(this._fisheyeFov),
+        imgSize: [texture.width, texture.height],
       });
     }
 
@@ -340,7 +438,7 @@ class WideAngleRealtimeProjection extends Projection {
       uHFov,
       uVFov,
       uFisheyeFov,
-      uImgSize
+      uImgSize,
     };
 
     const uniforms: RealtimeCorrectionUniforms = {
@@ -350,13 +448,13 @@ class WideAngleRealtimeProjection extends Projection {
       uHFov,
       uVFov,
       uFisheyeFov,
-      uImgSize
+      uImgSize,
     };
 
     // 根据配置选择几何体
     const geometry = this._flatProjection
       ? new PlaneGeometry(2, 1, -1) // 平面模式：2:1 比例平面
-      : new SphereGeometry();       // 默认模式：球体
+      : new SphereGeometry(); // 默认模式：球体
 
     const program = new ShaderProgram(ctx, vs, fs, uniforms);
     const vao = ctx.createVAO(geometry, program);
@@ -371,7 +469,7 @@ class WideAngleRealtimeProjection extends Projection {
       this._uniforms.uRotYPR.val = [
         toRad(-this._yaw),
         toRad(-this._pitch),
-        toRad(this._roll)
+        toRad(this._roll),
       ];
       this._uniforms.uRotYPR.needsUpdate = true;
     }

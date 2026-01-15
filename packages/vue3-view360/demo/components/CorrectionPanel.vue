@@ -1,6 +1,7 @@
 <script lang="ts">
 import { defineComponent, ref, PropType, watch } from "vue";
 
+// 矫正参数设置 (对应 WideAngleRealtimeProjection 的 correction 对象)
 // 使用 WideAngleRealtimeProjection 无需配置输出分辨率
 export interface CorrectionSettings {
   mode: "erp" | "fisheye";
@@ -17,12 +18,12 @@ export default defineComponent({
   props: {
     modelValue: {
       type: Object as PropType<CorrectionSettings>,
-      required: true
+      required: true,
     },
     sourceType: {
       type: String as PropType<"video" | "image">,
-      default: "video"
-    }
+      default: "video",
+    },
   },
   emits: ["update:modelValue", "apply", "update:sourceType"],
   setup(props, { emit }) {
@@ -31,15 +32,23 @@ export default defineComponent({
     // ... (rest of setup)
     const localSettings = ref<CorrectionSettings>({ ...props.modelValue });
 
-    watch(() => props.modelValue, (newVal) => {
-      if (JSON.stringify(newVal) !== JSON.stringify(localSettings.value)) {
-        localSettings.value = { ...newVal };
-      }
-    }, { deep: true });
+    watch(
+      () => props.modelValue,
+      (newVal) => {
+        if (JSON.stringify(newVal) !== JSON.stringify(localSettings.value)) {
+          localSettings.value = { ...newVal };
+        }
+      },
+      { deep: true }
+    );
 
-    watch(localSettings, (newVal) => {
-      emit("update:modelValue", { ...newVal });
-    }, { deep: true });
+    watch(
+      localSettings,
+      (newVal) => {
+        emit("update:modelValue", { ...newVal });
+      },
+      { deep: true }
+    );
 
     function setSourceType(type: "video" | "image") {
       emit("update:sourceType", type);
@@ -52,9 +61,9 @@ export default defineComponent({
     return {
       localSettings,
       setSourceType,
-      applySettings
+      applySettings,
     };
-  }
+  },
 });
 </script>
 
@@ -63,20 +72,20 @@ export default defineComponent({
     <div class="panel-header">
       <span class="panel-title">CORRECTION SETTINGS</span>
     </div>
-    
+
     <div class="panel-content">
       <!-- Source Toggle (New) -->
       <div class="control-group">
         <div class="source-toggle">
-          <button 
-            :class="{ active: sourceType === 'video' }" 
+          <button
+            :class="{ active: sourceType === 'video' }"
             @click="setSourceType('video')"
           >
             <span class="material-symbols-outlined">movie</span>
             VIDEO
           </button>
-          <button 
-            :class="{ active: sourceType === 'image' }" 
+          <button
+            :class="{ active: sourceType === 'image' }"
             @click="setSourceType('image')"
           >
             <span class="material-symbols-outlined">image</span>
@@ -92,7 +101,8 @@ export default defineComponent({
             <input type="radio" v-model="localSettings.mode" value="erp" /> ERP
           </label>
           <label :class="{ active: localSettings.mode === 'fisheye' }">
-            <input type="radio" v-model="localSettings.mode" value="fisheye" /> FISHEYE
+            <input type="radio" v-model="localSettings.mode" value="fisheye" />
+            FISHEYE
           </label>
         </div>
       </div>
@@ -101,20 +111,47 @@ export default defineComponent({
         <span class="group-label">ROTATION</span>
         <div class="input-row compact">
           <label>Yaw</label>
-          <input type="range" v-model.number="localSettings.yaw" min="-180" max="180" />
-          <input type="number" v-model.number="localSettings.yaw" class="row-num-input" />
+          <input
+            type="range"
+            v-model.number="localSettings.yaw"
+            min="-180"
+            max="180"
+          />
+          <input
+            type="number"
+            v-model.number="localSettings.yaw"
+            class="row-num-input"
+          />
           <span class="unit">deg</span>
         </div>
         <div class="input-row compact">
           <label>Pitch</label>
-          <input type="range" v-model.number="localSettings.pitch" min="-90" max="90" />
-          <input type="number" v-model.number="localSettings.pitch" class="row-num-input" />
+          <input
+            type="range"
+            v-model.number="localSettings.pitch"
+            min="-90"
+            max="90"
+          />
+          <input
+            type="number"
+            v-model.number="localSettings.pitch"
+            class="row-num-input"
+          />
           <span class="unit">deg</span>
         </div>
         <div class="input-row compact">
           <label>Roll</label>
-          <input type="range" v-model.number="localSettings.roll" min="-180" max="180" />
-          <input type="number" v-model.number="localSettings.roll" class="row-num-input" />
+          <input
+            type="range"
+            v-model.number="localSettings.roll"
+            min="-180"
+            max="180"
+          />
+          <input
+            type="number"
+            v-model.number="localSettings.roll"
+            class="row-num-input"
+          />
           <span class="unit">deg</span>
         </div>
       </div>
@@ -123,20 +160,47 @@ export default defineComponent({
         <span class="group-label">FOV</span>
         <div class="input-row compact">
           <label>H-FOV</label>
-          <input type="range" v-model.number="localSettings.hfov" min="10" max="360" />
-          <input type="number" v-model.number="localSettings.hfov" class="row-num-input" />
+          <input
+            type="range"
+            v-model.number="localSettings.hfov"
+            min="10"
+            max="360"
+          />
+          <input
+            type="number"
+            v-model.number="localSettings.hfov"
+            class="row-num-input"
+          />
           <span class="unit">deg</span>
         </div>
         <div class="input-row compact">
           <label>V-FOV</label>
-          <input type="range" v-model.number="localSettings.vfov" min="10" max="180" />
-          <input type="number" v-model.number="localSettings.vfov" class="row-num-input" />
+          <input
+            type="range"
+            v-model.number="localSettings.vfov"
+            min="10"
+            max="180"
+          />
+          <input
+            type="number"
+            v-model.number="localSettings.vfov"
+            class="row-num-input"
+          />
           <span class="unit">deg</span>
         </div>
         <div class="input-row compact" v-if="localSettings.mode === 'fisheye'">
           <label>Fisheye</label>
-          <input type="range" v-model.number="localSettings.fisheyeFov" min="10" max="360" />
-          <input type="number" v-model.number="localSettings.fisheyeFov" class="row-num-input" />
+          <input
+            type="range"
+            v-model.number="localSettings.fisheyeFov"
+            min="10"
+            max="360"
+          />
+          <input
+            type="number"
+            v-model.number="localSettings.fisheyeFov"
+            class="row-num-input"
+          />
           <span class="unit">deg</span>
         </div>
       </div>
@@ -209,9 +273,9 @@ export default defineComponent({
 .source-toggle {
   display: flex;
   background: transparent; /* Remove background to align border with edge */
-  padding: 0;             /* Remove padding */
+  padding: 0; /* Remove padding */
   border-radius: 14px;
-  border: none;           /* Remove container border */
+  border: none; /* Remove container border */
   margin-bottom: 12px;
   gap: 8px;
 }
@@ -243,7 +307,7 @@ export default defineComponent({
 
 .source-toggle button .material-symbols-outlined {
   font-size: 20px;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
 
 .source-toggle button.active .material-symbols-outlined {

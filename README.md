@@ -67,9 +67,7 @@ yarn install
 
 ### Development Server
 
-To start the development server for a specific package, use one of the following methods:
-
-**Method 1: Run from root directory (recommended)**
+Run from root directory (recommended):
 
 ```bash
 # For Vue 3
@@ -85,7 +83,7 @@ yarn workspace @egjs/vue-view360 start
 yarn workspace @egjs/svelte-view360 dev
 ```
 
-**Method 2: Run from package directory**
+Or run from package directory:
 
 ```bash
 cd packages/vue3-view360  # or any other package
@@ -98,29 +96,34 @@ The development server will start on `http://localhost:3000` (or the next availa
 
 ### Building
 
-**Build all packages:**
+Build all packages:
 
 ```bash
 yarn packages:build
 ```
 
-**Build a specific package:**
+Build a specific package:
 
 ```bash
-# From root directory
+# Build core library
+yarn workspace @egjs/view360 build
+
+# Build framework-specific packages
 yarn workspace @egjs/vue3-view360 build
 
 # Or from package directory
-cd packages/vue3-view360
+cd packages/view360  # or any other package
 yarn build
 ```
 
 ### Other Commands
 
-- **Lint:** `yarn lint`
-- **Test:** `yarn test`
-- **Generate documentation:** `yarn docs:build`
-- **Build demo site:** `yarn demo:build`
+```bash
+yarn lint              # Lint code
+yarn test              # Run tests
+yarn docs:build        # Generate documentation
+yarn demo:build        # Build demo site
+```
 
 ## �📦 Packages
 

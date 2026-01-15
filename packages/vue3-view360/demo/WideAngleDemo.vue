@@ -22,7 +22,7 @@ import {
 // 使用 Vite 静态资源导入
 // @ts-ignore
 // @ts-ignore
-import wideAngleDemoVideo from "./static/output_2160p.mp4?url";
+import wideAngleDemoVideo from "./static/qx.mp4?url";
 // @ts-ignore
 import wideAngleDemoImage from "./static/vlcsnap-2026-01-12-19h08m25s542.png?url";
 
@@ -209,7 +209,14 @@ export default defineComponent({
     const cameraToSourcePixel = (
       cameraYaw: number, // 相机 yaw（度）
       cameraPitch: number // 相机 pitch（度）
-    ): { x: number; y: number; z: number; valid: boolean } => {
+    ): {
+      x: number;
+      y: number;
+      z: number;
+      srcW: number;
+      srcH: number;
+      valid: boolean;
+    } => {
       const settings = correctionSettings.value;
 
       // 获取视频/图片尺寸
@@ -292,24 +299,15 @@ export default defineComponent({
       // Z = (srcH / 2) / tan(currentVFov / 2)
       // tan(currentVFov / 2) = tan(baseVFov / 2) / zoom
       // => Z = (srcH / 2) * zoom / tan(baseVFov / 2)
-      const baseFovRad = (65 * Math.PI) / 180;
+      // Adapted to match Algorithm Z: zoom 1.25 <-> z 1200 (approx 96.73 deg base fov)
+      const baseFovRad = (96.73 * Math.PI) / 180;
       const k = srcH / 2 / Math.tan(baseFovRad / 2);
       const z = k * zoom.value;
 
       // 检查是否在图像范围内
       const valid = px >= 0 && px < srcW && py >= 0 && py < srcH;
 
-      return { x: px, y: py, z, valid };
-    };
-    const shouldLogYawWrap = (
-      prevYaw: number,
-      nextYaw: number,
-      rawYaw: number
-    ) => {
-      // 当 rawYaw 接近 360 或 0，或 yaw 发生大跳变时才打印（避免刷屏）
-      const rawNearEdge = rawYaw > 350 || rawYaw < 10;
-      const yawJump = Math.abs(nextYaw - prevYaw) > 180;
-      return rawNearEdge || yawJump;
+      return { x: px, y: py, z, srcW, srcH, valid };
     };
 
     // 状态
@@ -432,13 +430,6 @@ export default defineComponent({
       if (!viewer) return;
 
       // 使用 Camera.animateTo 进行平滑过渡
-      if (enableCameraDebugLog.value) {
-        console.log("[camera-controls] slider->camera.animateTo", {
-          yaw: newYaw,
-          pitch: newPitch,
-          zoom: newZoom,
-        });
-      }
 
       await viewer.camera.animateTo({
         yaw: newYaw,
@@ -478,7 +469,21 @@ export default defineComponent({
         zoomRangeMax.value = currentZoomRange.max;
       }
 
-      // 初始化相机位置
+      // 根据默认像素坐标初始化相机位置
+      const initialPos = sourcePixelToCameraAngles(
+        targetPixelX.value,
+        targetPixelY.value,
+        targetPixelZ.value
+      );
+      if (initialPos) {
+        yaw.value = normalizeYawTo360(initialPos.yaw);
+        pitch.value = initialPos.pitch;
+        zoom.value = Math.max(
+          zoomRangeMin.value,
+          Math.min(zoomRangeMax.value, initialPos.zoom)
+        );
+      }
+
       viewer.camera.lookAt({
         yaw: yaw.value,
         pitch: pitch.value,
@@ -494,20 +499,6 @@ export default defineComponent({
         // 重要：保留高精度数值以确保 Minimap 平滑旋转，避免 Math.round 导致的卡顿
         const nextYaw = normalizeYawTo360(rawYaw);
 
-        // 关键日志：观察 yaw 从 0 往左拖时为何变成 360
-        if (
-          enableCameraDebugLog.value &&
-          shouldLogYawWrap(prevYaw, nextYaw, rawYaw)
-        ) {
-          console.log("[camera-controls] viewChange yaw wrap/debug", {
-            rawYaw,
-            rawYawNormalized360: normalizeYawTo360(rawYaw),
-            prevYaw,
-            nextYaw,
-            note: "rawYaw 为 Camera 内部 [0,360) 值；Yaw 控件使用旋钮以适配环绕区间",
-          });
-        }
-
         // yaw 使用 [0, 360) 区间，匹配 Camera 内部值
         yaw.value = nextYaw;
         pitch.value = e.pitch;
@@ -521,6 +512,8 @@ export default defineComponent({
           x: sourcePixel.x,
           y: sourcePixel.y,
           z: sourcePixel.z,
+          srcW: sourcePixel.srcW,
+          srcH: sourcePixel.srcH,
           valid: sourcePixel.valid,
         };
 
@@ -531,6 +524,8 @@ export default defineComponent({
           sourceX: sourcePixel.valid ? sourcePixel.x.toFixed(2) : "N/A",
           sourceY: sourcePixel.valid ? sourcePixel.y.toFixed(2) : "N/A",
           sourceZ: sourcePixel.z.toFixed(2),
+          srcW: sourcePixel.srcW,
+          srcH: sourcePixel.srcH,
           valid: sourcePixel.valid,
         });
 
@@ -538,34 +533,22 @@ export default defineComponent({
           isSyncingFromViewer.value = false;
         });
       });
-
-      // 额外日志：记录输入开始/结束，方便排查跳变发生在什么阶段
-      if (enableCameraDebugLog.value) {
-        viewer.on("inputStart", (evt: any) => {
-          if (evt?.inputType !== "rotate") return;
-          console.log("[camera-controls] inputStart(rotate)", {
-            isTouch: evt.isTouch,
-            isKeyboard: evt.isKeyboard,
-          });
-        });
-        viewer.on("inputEnd", (evt: any) => {
-          if (evt?.inputType !== "rotate") return;
-          console.log("[camera-controls] inputEnd(rotate)", {
-            isTouch: evt.isTouch,
-            isKeyboard: evt.isKeyboard,
-            scrolling: evt.scrolling,
-          });
-        });
-      }
     }
 
     // --- 像素反向定位逻辑 ---
-    const targetPixelX = ref(0);
-    const targetPixelY = ref(0);
-    const targetPixelZ = ref(0);
+    const targetPixelX = ref(3840);
+    const targetPixelY = ref(1080);
+    const targetPixelZ = ref(1200);
 
     // 当前视点对应的原始像素坐标
-    const currentSourcePixel = ref({ x: 0, y: 0, z: 0, valid: false });
+    const currentSourcePixel = ref({
+      x: 0,
+      y: 0,
+      z: 0,
+      srcW: 0,
+      srcH: 0,
+      valid: false,
+    });
 
     const toDeg = (rad: number) => (rad * 180) / Math.PI;
 
@@ -658,7 +641,8 @@ export default defineComponent({
       // 6. Z (Pixel Focal Length) -> Zoom
       // Z = (srcH / 2) * zoom / tan(baseVFov / 2)
       // => Zoom = Z * tan(baseVFov / 2) / (srcH / 2)
-      const baseFovRad = (65 * Math.PI) / 180;
+      // Adapted to match Algorithm Z: zoom 1.25 <-> z 1200
+      const baseFovRad = (96.73 * Math.PI) / 180;
       const k = srcH / 2 / Math.tan(baseFovRad / 2);
 
       // 如果 pz <= 0，保持当前 Zoom 不变（或者设为 1）

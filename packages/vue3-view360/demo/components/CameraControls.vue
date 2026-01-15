@@ -5,19 +5,17 @@ import KnobControl from "./KnobControl.vue";
 export default defineComponent({
   name: "CameraControls",
   components: {
-    KnobControl
+    KnobControl,
   },
   props: {
     yaw: { type: Number, required: true },
     pitch: { type: Number, required: true },
     zoom: { type: Number, required: true },
     zoomRangeMin: { type: Number, default: 0.6 },
-    zoomRangeMax: { type: Number, default: 10 }
+    zoomRangeMax: { type: Number, default: 10 },
   },
   emits: ["update:yaw", "update:pitch", "update:zoom"],
   setup(props, { emit }) {
-
-
     const getZoomPercent = () => {
       const min = props.zoomRangeMin;
       const max = props.zoomRangeMax;
@@ -39,9 +37,9 @@ export default defineComponent({
 
     return {
       getZoomPercent,
-      stepYaw
+      stepYaw,
     };
-  }
+  },
 });
 </script>
 
@@ -50,7 +48,6 @@ export default defineComponent({
     <div class="controls-header">
       <h3>CAMERA CONTROLS</h3>
       <p>Fine-tune your virtual camera</p>
-
     </div>
 
     <div class="sliders-container">
@@ -64,7 +61,9 @@ export default defineComponent({
           <input
             type="range"
             :value="zoom"
-            @input="$emit('update:zoom', +($event.target as HTMLInputElement).value)"
+            @input="
+              $emit('update:zoom', +($event.target as HTMLInputElement).value)
+            "
             :min="zoomRangeMin"
             :max="zoomRangeMax"
             step="0.01"
@@ -78,7 +77,9 @@ export default defineComponent({
       <!-- Yaw (绿色) -->
       <div class="control-row">
         <div class="label-group">
-          <span class="material-symbols-outlined icon yaw-icon">swap_horiz</span>
+          <span class="material-symbols-outlined icon yaw-icon"
+            >swap_horiz</span
+          >
           <span class="label">YAW</span>
         </div>
         <div class="slider-group knob-center">
@@ -87,28 +88,32 @@ export default defineComponent({
           </button>
           <!-- KnobControl supports v-model, so we need to bridge it -->
           <!-- We can use :modelValue and @update:modelValue -->
-          <KnobControl 
-            :modelValue="yaw" 
-            @update:modelValue="$emit('update:yaw', $event)" 
+          <KnobControl
+            :modelValue="yaw"
+            @update:modelValue="$emit('update:yaw', $event)"
           />
           <button class="arrow-btn" @click="stepYaw(-10)">
             <span class="material-symbols-outlined">chevron_right</span>
           </button>
         </div>
-        <div class="value-display bg-green">{{ Math.round(yaw) }}°</div>
+        <div class="value-display bg-green">{{ yaw.toFixed(2) }}°</div>
       </div>
 
       <!-- Pitch (紫色) -->
       <div class="control-row">
         <div class="label-group">
-          <span class="material-symbols-outlined icon pitch-icon">swap_vert</span>
+          <span class="material-symbols-outlined icon pitch-icon"
+            >swap_vert</span
+          >
           <span class="label">PITCH</span>
         </div>
         <div class="slider-group">
           <input
             type="range"
             :value="pitch"
-            @input="$emit('update:pitch', +($event.target as HTMLInputElement).value)"
+            @input="
+              $emit('update:pitch', +($event.target as HTMLInputElement).value)
+            "
             :min="-90"
             :max="90"
             step="1"
@@ -116,7 +121,7 @@ export default defineComponent({
             :style="({ '--value': (((pitch + 90) / 180) * 100) + '%' } as any)"
           />
         </div>
-        <div class="value-display bg-purple">{{ Math.round(pitch) }}°</div>
+        <div class="value-display bg-purple">{{ pitch.toFixed(2) }}°</div>
       </div>
     </div>
   </div>
@@ -170,9 +175,6 @@ export default defineComponent({
   padding-top: 10px; /* Spacing from header */
 }
 
-
-
-
 /* 滑动条行样式 */
 .control-row {
   display: flex;
@@ -200,9 +202,15 @@ export default defineComponent({
   justify-content: center;
 }
 
-.zoom-icon { color: #3b82f6; }
-.yaw-icon { color: #10b981; }
-.pitch-icon { color: #a855f7; }
+.zoom-icon {
+  color: #3b82f6;
+}
+.yaw-icon {
+  color: #10b981;
+}
+.pitch-icon {
+  color: #a855f7;
+}
 
 .label {
   font-size: 12px;
@@ -269,12 +277,24 @@ export default defineComponent({
   width: 100%;
   height: 4px;
   border-radius: 2px;
-  background: linear-gradient(to right, var(--track-color) 0%, var(--track-color) var(--value), rgba(255, 255, 255, 0.1) var(--value), rgba(255, 255, 255, 0.1) 100%);
+  background: linear-gradient(
+    to right,
+    var(--track-color) 0%,
+    var(--track-color) var(--value),
+    rgba(255, 255, 255, 0.1) var(--value),
+    rgba(255, 255, 255, 0.1) 100%
+  );
 }
 
-.slider-blue { --track-color: #3b82f6; }
-.slider-green { --track-color: #10b981; }
-.slider-purple { --track-color: #a855f7; }
+.slider-blue {
+  --track-color: #3b82f6;
+}
+.slider-green {
+  --track-color: #10b981;
+}
+.slider-purple {
+  --track-color: #a855f7;
+}
 
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -294,7 +314,7 @@ export default defineComponent({
 }
 
 .value-display {
-  width: 48px;
+  width: 64px;
   height: 24px;
   border-radius: 4px;
   display: flex;
@@ -305,7 +325,19 @@ export default defineComponent({
   color: #fff;
 }
 
-.bg-blue { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
-.bg-green { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-.bg-purple { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+.bg-blue {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+.bg-green {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.bg-purple {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
 </style>

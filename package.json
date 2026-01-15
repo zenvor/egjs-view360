@@ -7,6 +7,7 @@
     "packages": "npm run packages:update && npm run packages:build && npm run packages:publish",
     "packages:update": "lerna-helper version",
     "packages:build": "npm run build --prefix packages/view360 && lerna run build --ignore @egjs/view360 --ignore @egjs/ngx-view360 --stream",
+    "packages:build-core": "npm run build --prefix packages/view360",
     "packages:publish": "lerna-helper publish --ignore @egjs/ngx-view360 --commit 'chore: update packages versions'",
     "changelog": "lerna-helper changelog --type all --base @egjs/view360",
     "docs:build": "typedoc-to-mdx -c typedoc-to-mdx.json",
